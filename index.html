@@ -245,7 +245,7 @@
     Vh_nnoremap("k", () => { document.getElementById("vh-select-tag-ts-control").focus(); });
     Vh_nnoremap("s", () => { document.getElementById("vh-srch-input").focus(); });
 
-    Vh_inoremap("Escape", () => { document.activeElement?.blur(); } )
+    Vh_inoremap("Escape", () => { if (document.activeElement) document.activeElement.blur(); });
   </script>
 
   <!-- nothing customized after this -->
