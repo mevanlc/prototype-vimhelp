@@ -1,0 +1,197 @@
+<html>
+
+<head>
+  <link rel="stylesheet" href="https://vimhelp.org/vimhelp-v5.css">
+  <style>
+    .kb-key {
+      box-shadow: 0 0px var(--bg1),
+        0 1px var(--bg1),
+        0 2px var(--bg1),
+        0 3px var(--bg1),
+        0 4px var(--bg1),
+        2px 2.5px 2px var(--bg1),
+        0 -1px 2px var(--bg1);
+      background-color: var(--bg4);
+      border-color: var(--bg2);
+      color: var(--fg1);
+      border: 1px solid var(--bg2);
+      margin-right: 0.25rem;
+      padding: 0.1rem 0.45rem;
+      border-radius: 0.25rem;
+      font-weight: bold;
+      min-width: 1.5rem;
+    }
+
+    /* 
+    Style for the modal dimmed background. Could have used ::backdrop but it's newish. (2019+)
+    */
+    .modal-background {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 1;
+    }
+
+    .modal-window {
+      display: none;
+      position: fixed;
+      top: 25%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--bg1);
+      padding: 5px;
+      z-index: 2;
+      min-width: 300px;
+      padding: 10px;
+    }
+
+    .modal-close-button {
+      color: #aaa;
+      float: right;
+      font-size: large;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    #kbhelp-button {
+      /* similar to #theme-switcher margin-top */
+      margin-top: 9pt;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- mevanlc: "title-cont" is unmodified except for the commented lines -->
+  <div id="title-cont">
+    <!-- mevanlc: added flex-grow: 1 to push other elements to the far right -->
+    <h1 style="flex-grow: 1">Vim help files</h1>
+
+    <div id="theme-switcher">
+      <button id="theme-current" title="Switch theme">Theme</button>
+      <div id="theme-dropdown">
+        <ul>
+          <li><button id="theme-native" title="Switch to native theme (which is dark)">Native</button></li>
+          <li><button id="theme-light" title="Switch to light theme">Light</button></li>
+          <li><button id="theme-dark" title="Switch to dark theme">Dark</button></li>
+        </ul>
+      </div>
+    </div>
+
+    <div id="kbhelp-button" class="kb-key">?</div>
+  </div>
+
+  <!-- mevanlc: new code for modal window -->
+  <div id="kbhelp-modal-window" class="modal-window">
+    <h2>Keyboard Shortcuts</h2>
+    <table>
+      <tr>
+        <td>
+          <div class="kb-key">k</div>
+        </td>
+        <td>Keyword search</td>
+      </tr>
+      <tr>
+        <td>
+          <div class="kb-key">s</div>
+        </td>
+        <td>Site search</td>
+      </tr>
+      <tr>
+        <td><div class="kb-key">?</div></td>
+        <td>Open this help</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- stubs so that vimhelp.js will load -->
+  <input type="text" id="vh-select-tag-ts-control" class="vh-search-input" placeholder="Keyword search"></input>
+  <input type="text" id="vh-srch-input" placeholder="Site search"></input>
+  <span id="vh-sidebar"></span>
+  <span id="vh-content"></span>
+  <script>function TomSelect() { return this; }</script>
+  <!-- /stubs so that vimhelp.js will load -->
+
+  <!-- mevanlc: scripting for modal window -->
+  <script>
+    function registerModalWindow(name = "kbhelp-modal-window") {
+      const modalDialog = document.getElementById(name);
+      const closeButton = document.createElement("span");
+      closeButton.innerHTML = "&times;";
+      closeButton.className = "modal-close-button";
+      modalDialog.prepend(closeButton);
+      const modalBackground = document.createElement("div");
+      modalBackground.className = "modal-background";
+      document.body.appendChild(modalBackground);
+
+      function close() {
+        modalDialog.style.display = "none";
+        modalBackground.style.display = "none";
+      }
+
+      function open() {
+        modalDialog.style.display = "block";
+        modalBackground.style.display = "block";
+      }
+
+      window.addEventListener("click", function () {
+        if (event.target == closeButton || event.target == modalBackground) {
+          close();
+        }
+      });
+
+      window.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+          try {
+            close();
+          } catch (e) {
+            console.log(e);
+          }
+        }
+      });
+
+      return { open, close };
+    }
+    
+    function Vh_nnoremap(key, handlerFn) {
+      const TagsToIgnore = { "INPUT": true, "TEXTAREA": true, "SELECT": true, "BUTTON": true };
+      window.addEventListener("keydown", function (e) {
+        if (e.isComposing || e.keyCode === 229) {
+          // https://developer.mozilla.org/en-US/docs/Web/API/Element/keydown_event
+          return;
+        }
+        const a = document.activeElement;
+        if (a && (a.tagName in TagsToIgnore || a.isContentEditable)) {
+          return;
+        }
+        if (e.key === key) {
+          e.preventDefault();
+          handlerFn(e);
+        }
+      });
+    }
+
+    const KbHelpModalDialog = registerModalWindow("kbhelp-modal-window");
+
+    const KbhelpButton = document.getElementById("kbhelp-button");
+    KbhelpButton.addEventListener("click", KbHelpModalDialog.open);
+
+    Vh_nnoremap("?", KbHelpModalDialog.open);
+    /*
+    Vh_nnoremap("k", function () {
+      document.getElementById("vh-select-tag-ts-control").focus();
+    });
+    Vh_nnoremap("s", function () {
+      document.getElementById("vh-srch-input").focus();
+    });
+    */
+  </script>
+
+  <script src="https://vimhelp.org/vimhelp-v6.js"></script>
+</body>
+
+</html>
