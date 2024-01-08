@@ -1,8 +1,12 @@
+<!DOCTYPE html>
 <html>
 
 <head>
   <link rel="stylesheet" href="https://vimhelp.org/vimhelp-v5.css">
+  <!-- empty favicon to appease Firefox's dev console-->
+  <link rel="icon" href="data:;base64,iVBORw0KGgo=">
   <style>
+    /* CSS that makes an element look kind of like a keyboard key */
     .kb-key {
       box-shadow: 0 0px var(--bg1),
         0 1px var(--bg1),
@@ -22,9 +26,7 @@
       min-width: 1.5rem;
     }
 
-    /* 
-    Style for the modal dimmed background. Could have used ::backdrop but it's newish. (2019+)
-    */
+    /* Modal dimmed background. Could have used .modal-window::backdrop but it's newish. (2019+) */
     .modal-background {
       display: none;
       position: fixed;
@@ -32,25 +34,27 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background-color: rgba(0, 0, 0, 0.5);
+      background-color: rgba(0, 0, 0, 0.67);
       z-index: 1;
     }
 
+    /* Modal window. Could have used <dialog> but it's newish. (2016+?) */
     .modal-window {
       display: none;
       position: fixed;
-      top: 25%;
+      top: 33%;
       left: 50%;
-      transform: translate(-50%, -50%);
-      background: var(--bg1);
+      transform: translate(-50%, -33%);
+      background: var(--bg0);
       padding: 5px;
       z-index: 2;
       min-width: 300px;
       padding: 10px;
+      border-radius: 3px;
     }
 
     .modal-close-button {
-      color: #aaa;
+      color: var(--fg1);
       float: right;
       font-size: large;
       font-weight: bold;
@@ -58,9 +62,25 @@
     }
 
     #kbhelp-button {
-      /* similar to #theme-switcher margin-top */
-      margin-top: 9pt;
+      /* same as #theme-switcher margin-top */
+      margin-top: 8pt;
       cursor: pointer;
+    }
+
+    #kbhelp-modal-window table {
+      border-collapse: separate;
+    }
+
+    #kbhelp-modal-window td {
+      padding-bottom: 1rem;
+    }
+
+    #kbhelp-modal-window td:nth-child(even) {
+      padding-right: 2rem;
+    }
+
+    #theme-current {
+      border-radius: 3px;
     }
   </style>
 </head>
@@ -94,23 +114,23 @@
           <div class="kb-key">k</div>
         </td>
         <td>Keyword search</td>
-      </tr>
-      <tr>
         <td>
           <div class="kb-key">s</div>
         </td>
         <td>Site search</td>
       </tr>
       <tr>
-        <td><div class="kb-key">?</div></td>
+        <td>
+          <div class="kb-key">?</div>
+        </td>
         <td>Open this help</td>
       </tr>
     </table>
   </div>
 
   <!-- stubs so that vimhelp.js will load -->
-  <input type="text" id="vh-select-tag-ts-control" class="vh-search-input" placeholder="Keyword search"></input>
-  <input type="text" id="vh-srch-input" placeholder="Site search"></input>
+  <input type="text" id="vh-select-tag-ts-control" class="vh-search-input" placeholder="Keyword search" />
+  <input type="text" id="vh-srch-input" placeholder="Site search" />
   <span id="vh-sidebar"></span>
   <span id="vh-content"></span>
   <script>function TomSelect() { return this; }</script>
@@ -118,7 +138,7 @@
 
   <!-- mevanlc: scripting for modal window -->
   <script>
-    function registerModalWindow(name = "kbhelp-modal-window") {
+    function Vh_registerModalWindow(name = "kbhelp-modal-window") {
       const modalDialog = document.getElementById(name);
       const closeButton = document.createElement("span");
       closeButton.innerHTML = "&times;";
@@ -138,6 +158,14 @@
         modalBackground.style.display = "block";
       }
 
+      function toggle() {
+        if (modalDialog.style.display === "block") {
+          close();
+        } else {
+          open();
+        }
+      }
+
       window.addEventListener("click", function () {
         if (event.target == closeButton || event.target == modalBackground) {
           close();
@@ -154,44 +182,115 @@
         }
       });
 
-      return { open, close };
+      return { open, close, toggle };
     }
-    
-    function Vh_nnoremap(key, handlerFn) {
-      const TagsToIgnore = { "INPUT": true, "TEXTAREA": true, "SELECT": true, "BUTTON": true };
+
+    const KbHelpModalWindow = Vh_registerModalWindow("kbhelp-modal-window");
+    const ModalWindows = [KbHelpModalWindow];
+
+    // make main [?] button clickable
+    const KbHelpButton = document.getElementById("kbhelp-button");
+    KbHelpButton.addEventListener("click", KbHelpModalWindow.open);
+
+    /******
+     * Key mapping things
+     */
+
+    /**
+     * Registers a key mapping that only executes if `predicateFn` returns true.
+     * 
+     * @param {string} key - The key to map.
+     * @param {function} predicateFn - The function to call to determine whether to execute the mapping.
+     * @param {function} handlerFn - The function to call when the key is pressed.
+     * @param {object} options - Options for the mapping.
+     * @param {boolean} options.closeModals - Whether to close modals when the key is pressed; default: true
+     * @param {boolean} options.preventDefault - Whether to prevent the default action of the key; default: true
+     */
+    function Vh_mapkey(key, predicateFn, handlerFn, options = {}) {
       window.addEventListener("keydown", function (e) {
         if (e.isComposing || e.keyCode === 229) {
           // https://developer.mozilla.org/en-US/docs/Web/API/Element/keydown_event
           return;
         }
-        const a = document.activeElement;
-        if (a && (a.tagName in TagsToIgnore || a.isContentEditable)) {
-          return;
-        }
-        if (e.key === key) {
-          e.preventDefault();
+        if (predicateFn(e)) {
+          if (e.key !== key) {
+            return;
+          }
+          if (options.closeModals !== false) {
+            ModalWindows.forEach(d => d.close());
+          }
+          if (options.preventDefault !== false) {
+            e.preventDefault();
+          }
           handlerFn(e);
         }
       });
     }
 
-    const KbHelpModalDialog = registerModalWindow("kbhelp-modal-window");
+    const InputTags = { "INPUT": true, "TEXTAREA": true, "SELECT": true, "BUTTON": true };
+    function isInputFocused() {
+      const a = document.activeElement;
+      return a && (a.tagName in InputTags || a.isContentEditable);
+    }
 
-    const KbhelpButton = document.getElementById("kbhelp-button");
-    KbhelpButton.addEventListener("click", KbHelpModalDialog.open);
+    function Vh_nnoremap(key, handlerFn, options = {}) {
+      Vh_mapkey(key, () => !isInputFocused(), handlerFn, options);
+    }
 
-    Vh_nnoremap("?", KbHelpModalDialog.open);
-    /*
-    Vh_nnoremap("k", function () {
-      document.getElementById("vh-select-tag-ts-control").focus();
-    });
-    Vh_nnoremap("s", function () {
-      document.getElementById("vh-srch-input").focus();
-    });
-    */
+    function Vh_inoremap(key, handlerFn, options = {}) {
+      Vh_mapkey(key, isInputFocused, handlerFn, options);
+    }
+
+    Vh_nnoremap("?", KbHelpModalWindow.toggle, { closeModals: false });
+    Vh_nnoremap("k", () => { document.getElementById("vh-select-tag-ts-control").focus(); });
+    Vh_nnoremap("s", () => { document.getElementById("vh-srch-input").focus(); });
+
+    Vh_inoremap("Escape", () => { document.activeElement?.blur(); } )
   </script>
 
-  <script src="https://vimhelp.org/vimhelp-v6.js"></script>
+  <!-- nothing customized after this -->
+  <!-- verbatim from https://vimhelp.org/vimhelp-v6.js" -->
+  <script>
+    for (let theme of ["theme-native", "theme-light", "theme-dark"]) {
+      document.getElementById(theme).addEventListener("click", (e) => {
+        console.log("selected theme:", theme);
+        const [className, meta] = {
+          "theme-native": ["", "light dark"],
+          "theme-light": ["light", "only light"],
+          "theme-dark": ["dark", "only dark"]
+        }[theme];
+        document.getElementsByTagName("html")[0].className = className;
+        document.querySelector('meta[name="color-scheme"]').content = meta;
+
+        const cookieDomain = location.hostname.replace(/^neo\./, "");
+        const cookieExpiry = theme === "theme-native"
+          ? "Tue, 01 Jan 1970 00:00:00 GMT"   // delete cookie
+          : "Fri, 31 Dec 9999 23:59:59 GMT";  // set "permanent" cookie
+        document.cookie =
+          `theme=${className}; Secure; Domain=${cookieDomain}; SameSite=Lax; Path=/; Expires=${cookieExpiry}`;
+      });
+    }
+
+    document.getElementById("theme-current").addEventListener("click", (e) => {
+      const themeDropdown = document.getElementById("theme-dropdown");
+      if (!themeDropdown.style.display) {
+        // if currently hidden, show it...
+        themeDropdown.style.display = "revert";
+        // ...and prevent the handler on <body> from running, which would hide it again.
+        e.stopPropagation();
+      }
+    });
+
+    document.getElementsByTagName("body")[0].addEventListener("click", (e) => {
+      // hide theme dropdown (vimhelp.css has it as "display: none")
+      document.getElementById("theme-dropdown").style.display = null;
+    });
+
+    // tweak native theme button tooltip
+    document.getElementById("theme-native").title = "Switch to native theme" +
+      (matchMedia("(prefers-color-scheme: dark)").matches ? " (which is dark)" : " (which is light)");
+
+  </script>
 </body>
 
 </html>
